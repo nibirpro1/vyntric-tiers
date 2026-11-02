@@ -3,9 +3,9 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { KITS, Kit, KIT_MAP } from "@vyntric/shared";
-import { createErrorEmbed, createSuccessEmbed } from "../embeds/brand";
-import { TestService } from "../services/testService";
-import { QueueService } from "../services/queueService";
+import { createErrorEmbed, createSuccessEmbed } from "../embeds/brand.js";
+import { TestService } from "../services/testService.js";
+import { QueueService } from "../services/queueService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("next")

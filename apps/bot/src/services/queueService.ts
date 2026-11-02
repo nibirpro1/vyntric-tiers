@@ -9,8 +9,8 @@ import {
 } from "discord.js";
 import { Kit, KIT_MAP, KITS, Region, REGION_MAP } from "@vyntric/shared";
 import { prisma } from "@vyntric/db";
-import { config } from "../config";
-import { createBaseEmbed, VY_COLORS } from "../embeds/brand";
+import { config } from "../config.js";
+import { createBaseEmbed, VY_BRAND, VY_COLORS } from "../embeds/brand.js";
 
 export class QueueService {
   private static panelMessages: Map<Kit, string> = new Map();
@@ -44,10 +44,10 @@ export class QueueService {
   public static async buildQueueEmbed(kit: Kit): Promise<EmbedBuilder> {
     const kitMeta = KIT_MAP[kit];
 
-    // Fetch active waiting players
+    // Fetch active waiting players in order of arrival
     const waitingEntries = await prisma.queueEntry.findMany({
       where: { kit, status: "WAITING" },
-      orderBy: { position: "asc" },
+      orderBy: { createdAt: "asc" },
       take: 10,
     });
 
@@ -57,7 +57,7 @@ export class QueueService {
     });
     const playerMap = new Map(players.map((p) => [p.id, p]));
 
-    // Fetch online testers for this kit
+    // Fetch online testers who specialize in or can test this kit
     const testers = await prisma.tester.findMany({
       where: {
         status: { in: ["ONLINE", "TESTING"] },
@@ -65,7 +65,7 @@ export class QueueService {
       },
     });
 
-    let queueList = "🟢 *Queue is currently empty. Be the first to join!*";
+    let queueList = "🟢 *Queue is empty. Click [Join Queue] to test your rank!*";
     if (waitingEntries.length > 0) {
       queueList = waitingEntries
         .map((entry, index) => {
@@ -76,7 +76,8 @@ export class QueueService {
             1,
             Math.round((Date.now() - new Date(entry.createdAt).getTime()) / 60000)
           );
-          return `**${index + 1}.** \`${ign}\` ${region} • *${timeWaiting}m in queue*`;
+          const estWait = index === 0 ? "Next in line" : `~${index * 10}m est.`;
+          return `**${index + 1}.** \`${ign}\` ${region} • *${timeWaiting}m in queue* (${estWait})`;
         })
         .join("\n");
     }
@@ -84,7 +85,7 @@ export class QueueService {
     const onlineTestersList =
       testers.length > 0
         ? testers.map((t) => `• **${t.ign}** (${t.status === "TESTING" ? "⚔️ In Test" : "🟢 Ready"})`).join("\n")
-        : "*No testers currently online for this ladder.*";
+        : "*No certified testers currently active for this ladder.*";
 
     const embed = createBaseEmbed()
       .setColor(VY_COLORS.primary)
@@ -95,11 +96,11 @@ export class QueueService {
         `${queueList}\n\n` +
         `### Available Testers (${testers.length})\n` +
         `${onlineTestersList}\n\n` +
-        `⏱ *Average test time: 8-12 minutes. Tests are First-to-5 duels.*`
+        `⏱ *Average duel duration: 8–12 minutes. Format: First-to-5 (FT5).*`
       )
       .setFooter({
-        text: `Vyntric Tiers • ${kitMeta.name} Queue • Ranked. Tested. Verified.`,
-        iconURL: "https://mc-heads.net/head/MHF_Chest/64",
+        text: `Vyntric Tiers • ${kitMeta.name} Queue • ${VY_BRAND.tagline}`,
+        iconURL: VY_BRAND.logoIcon,
       });
 
     return embed;
@@ -107,6 +108,7 @@ export class QueueService {
 
   /**
    * Initializes or updates persistent panels in the #queue channel.
+   * Scans existing channel messages to avoid duplicate panel spam on restart.
    */
   public static async setupOrRefreshPanels(client: Client): Promise<void> {
     if (!config.QUEUE_CHANNEL_ID) return;
@@ -115,6 +117,24 @@ export class QueueService {
       const channel = await client.channels.fetch(config.QUEUE_CHANNEL_ID).catch(() => null);
       if (!channel || !(channel instanceof TextChannel)) return;
 
+      // Scan existing channel messages if map is empty
+      if (this.panelMessages.size === 0) {
+        const fetchedMessages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+        if (fetchedMessages) {
+          for (const msg of Array.from(fetchedMessages.values())) {
+            if (msg.author.id !== client.user?.id) continue;
+            const embedTitle = msg.embeds[0]?.title || "";
+            for (const k of KITS) {
+              if (embedTitle.includes(`${k.name.toUpperCase()} TIER TESTING QUEUE`)) {
+                this.panelMessages.set(k.id, msg.id);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Refresh or send each kit panel
       for (const kitMeta of KITS) {
         const kit = kitMeta.id;
         const embed = await this.buildQueueEmbed(kit);
@@ -209,14 +229,13 @@ export class QueueService {
     }
 
     // 4. Calculate position and insert
-    const lastEntry = await prisma.queueEntry.findFirst({
+    const waitingCount = await prisma.queueEntry.count({
       where: { kit, status: "WAITING" },
-      orderBy: { position: "desc" },
     });
 
-    const nextPosition = (lastEntry?.position ?? 0) + 1;
+    const nextPosition = waitingCount + 1;
 
-    const entry = await prisma.queueEntry.create({
+    await prisma.queueEntry.create({
       data: {
         playerId: player.id,
         kit,

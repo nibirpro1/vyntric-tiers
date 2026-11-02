@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
@@ -7,6 +8,7 @@ import {
   GuildMember,
   PermissionsBitField,
   TextChannel,
+  User,
 } from "discord.js";
 import {
   Kit,
@@ -14,13 +16,18 @@ import {
   KIT_MAP,
   compareTiers,
   calculatePoints,
-  TIER_ORDER,
 } from "@vyntric/shared";
 import { prisma } from "@vyntric/db";
-import { config } from "../config";
-import { createBaseEmbed, createResultEmbed, VY_COLORS } from "../embeds/brand";
-import { TierService } from "./tierService";
-import { LogService } from "./logService";
+import { config } from "../config.js";
+import {
+  createBaseEmbed,
+  createResultEmbed,
+  createTranscriptEmbed,
+  createWarningEmbed,
+  VY_COLORS,
+} from "../embeds/brand.js";
+import { TierService } from "./tierService.js";
+import { LogService } from "./logService.js";
 
 export class TestService {
   /**
@@ -67,10 +74,10 @@ export class TestService {
       };
     }
 
-    // 2. Find next waiting entry
+    // 2. Find next waiting entry (chronological order)
     const entry = await prisma.queueEntry.findFirst({
       where: { kit, status: "WAITING" },
-      orderBy: { position: "asc" },
+      orderBy: { createdAt: "asc" },
     });
 
     if (!entry) {
@@ -99,6 +106,13 @@ export class TestService {
     await prisma.tester.update({
       where: { id: tester.id },
       data: { status: "TESTING" },
+    });
+
+    // Broadcast tester status to website
+    await TierService.broadcastLiveUpdate("tester_status_changed", {
+      testerId: tester.id,
+      ign: tester.ign,
+      status: "TESTING",
     });
 
     // 5. Create ticket channel
@@ -151,17 +165,17 @@ export class TestService {
     const kitMeta = KIT_MAP[kit];
     const controlEmbed = createBaseEmbed()
       .setColor(VY_COLORS.cyan)
-      .setTitle(`⚔️ VYNTRIC TEST SESSION: ${kitMeta.name}`)
+      .setTitle(`⚔️ VYNTRIC TEST SESSION: ${kitMeta.name.toUpperCase()}`)
       .setDescription(
         `Welcome to your official competitive tier test!\n\n` +
         `**Tester:** <@${testerMember.id}> (\`${tester.ign}\`)\n` +
         `**Player:** <@${player.discordId}> (\`${player.ign}\`)\n` +
         `**Format:** First-to-5 Duels (FT5)\n` +
-        `**Server:** Connect to the agreed duel server (e.g. \`na.minemen.club\` or \`eu.minemen.club\`).\n\n` +
-        `### Rules Reminder\n` +
-        `• No recording software or client modifications that violate competitive standards.\n` +
-        `• Ping equalization rules apply if latency delta exceeds 60ms.\n` +
-        `• Tester will run \`/result tier:<tier> score:<score>\` when finished.`
+        `**Server:** Agree on competitive host (e.g. \`na.minemen.club\` or \`eu.minemen.club\`).\n\n` +
+        `### Testing Protocol\n` +
+        `• Only standard client modifications allowed (Lunar, Badlion, Feather, Vanilla).\n` +
+        `• Ping equalization rules apply if latency difference > 60ms.\n` +
+        `• Tester will execute \`/result tier:<tier> score:<score> [notes]\` upon match completion.`
       );
 
     await channel.send({
@@ -191,7 +205,6 @@ export class TestService {
     // 1. Identify player from channel topic or entry
     const topic = channel.topic || "";
     const playerIgnMatch = topic.match(/Player:\s*([^\s|]+)/i);
-    const kitMatch = topic.match(/Kit:\s*([^\s|]+)/i);
 
     if (!playerIgnMatch) {
       return {
@@ -219,19 +232,25 @@ export class TestService {
     }
 
     // 2. Determine previous tier and compare
+    // Note: in @vyntric/shared, compareTiers(a, b) = tierToNumber(a) - tierToNumber(b)
+    // where HT1 = 1, LT1 = 2 ... LT5 = 10.
+    // Therefore:
+    // cmp < 0 => newTier is higher rank than previousTier => PROMOTED
+    // cmp > 0 => newTier is lower rank than previousTier => DEMOTED
+    // cmp === 0 => RETAINED
     const existingTierRecord = player.tiers.find((t) => t.kit === kit);
     const previousTier = existingTierRecord?.tier || null;
 
     let resultType: "PROMOTED" | "DEMOTED" | "RETAINED" | "NEW" = "NEW";
     if (previousTier) {
       const cmp = compareTiers(newTier, previousTier);
-      if (cmp > 0) resultType = "PROMOTED";
-      else if (cmp < 0) resultType = "DEMOTED";
+      if (cmp < 0) resultType = "PROMOTED";
+      else if (cmp > 0) resultType = "DEMOTED";
       else resultType = "RETAINED";
     }
 
     const peakTier = existingTierRecord
-      ? compareTiers(newTier, existingTierRecord.peakTier) > 0
+      ? compareTiers(newTier, existingTierRecord.peakTier) < 0
         ? newTier
         : existingTierRecord.peakTier
       : newTier;
@@ -402,7 +421,16 @@ export class TestService {
       globalRank,
     });
 
-    // 12. Send transcript & schedule ticket channel deletion
+    // 12. Archive transcript before channel self-destructs
+    await this.archiveTranscript(
+      channel,
+      tester.name,
+      player.ign,
+      kit,
+      `Completed (${newTier} - ${resultType})`
+    );
+
+    // 13. Send conclusion notice & schedule ticket channel deletion
     await channel.send({
       embeds: [
         createBaseEmbed("✅ Test Finalized & Recorded")
@@ -423,5 +451,151 @@ export class TestService {
       success: true,
       message: `Successfully recorded result: **${player.ign}** is now **${newTier}** in **${KIT_MAP[kit].name}**!`,
     };
+  }
+
+  /**
+   * Generates and archives a complete transcript of the ticket channel.
+   */
+  public static async archiveTranscript(
+    channel: TextChannel,
+    testerName: string,
+    playerIgn: string,
+    kit: Kit,
+    outcome: string
+  ): Promise<void> {
+    if (!config.TRANSCRIPTS_CHANNEL_ID) return;
+
+    try {
+      const transcriptsChannel = await channel.guild.channels
+        .fetch(config.TRANSCRIPTS_CHANNEL_ID)
+        .catch(() => null);
+
+      if (!transcriptsChannel || !(transcriptsChannel instanceof TextChannel)) return;
+
+      // Fetch up to 100 recent messages
+      const fetched = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+      if (!fetched || fetched.size === 0) return;
+
+      const sortedMessages = Array.from(fetched.values()).reverse();
+      let transcriptText = `=====================================================\n`;
+      transcriptText += `VYNTRIC TIERS — DUEL TICKET TRANSCRIPT\n`;
+      transcriptText += `Channel: #${channel.name}\n`;
+      transcriptText += `Ladder: ${kit}\n`;
+      transcriptText += `Tester: ${testerName}\n`;
+      transcriptText += `Player: ${playerIgn}\n`;
+      transcriptText += `Outcome: ${outcome}\n`;
+      transcriptText += `Date: ${new Date().toISOString()}\n`;
+      transcriptText += `Total Messages: ${sortedMessages.length}\n`;
+      transcriptText += `=====================================================\n\n`;
+
+      for (const msg of sortedMessages) {
+        const time = msg.createdAt.toISOString().replace("T", " ").replace("Z", "");
+        const author = `${msg.author.tag} (${msg.author.id})`;
+        const content = msg.cleanContent || (msg.embeds.length > 0 ? `[Embed: ${msg.embeds[0].title || "Embedded Content"}]` : "[Attachment/Empty]");
+        transcriptText += `[${time}] ${author}:\n${content}\n\n`;
+      }
+
+      const buffer = Buffer.from(transcriptText, "utf-8");
+      const attachment = new AttachmentBuilder(buffer, {
+        name: `transcript-${channel.name}.txt`,
+      });
+
+      const summaryEmbed = createTranscriptEmbed({
+        channelName: channel.name,
+        testerName,
+        playerIgn,
+        kit,
+        outcome,
+        messageCount: sortedMessages.length,
+      });
+
+      await transcriptsChannel.send({
+        embeds: [summaryEmbed],
+        files: [attachment],
+      });
+    } catch (err) {
+      console.warn("Failed to archive duel ticket transcript:", err);
+    }
+  }
+
+  /**
+   * Handles cancellation, player no-show, or early ticket close.
+   * Releases tester back to ONLINE and sets queue entry to CANCELLED.
+   */
+  public static async handleTicketCancellation(
+    channel: TextChannel,
+    initiator: User,
+    reason: "NO_SHOW" | "CANCELLED" | "MANUAL_CLOSE"
+  ): Promise<void> {
+    const topic = channel.topic || "";
+    const playerIgnMatch = topic.match(/Player:\s*([^\s|]+)/i);
+    const kitMatch = topic.match(/Kit:\s*([^\s|]+)/i);
+    const testerIgnMatch = topic.match(/Tester:\s*([^\s|]+)/i);
+
+    const playerIgn = playerIgnMatch ? playerIgnMatch[1] : "Unknown";
+    const kit = (kitMatch ? kitMatch[1] : "SWORD") as Kit;
+    const testerIgn = testerIgnMatch ? testerIgnMatch[1] : initiator.username;
+
+    // 1. Release tester back to ONLINE
+    if (testerIgnMatch) {
+      await prisma.tester.updateMany({
+        where: { ign: testerIgnMatch[1], status: "TESTING" },
+        data: { status: "ONLINE" },
+      });
+    }
+
+    // 2. Mark active IN_TEST queue entry as CANCELLED
+    if (playerIgnMatch) {
+      const player = await prisma.player.findUnique({ where: { ign: playerIgnMatch[1] } });
+      if (player) {
+        await prisma.queueEntry.updateMany({
+          where: { playerId: player.id, kit, status: "IN_TEST" },
+          data: { status: "CANCELLED" },
+        });
+      }
+    }
+
+    // 3. Log action to staff logs
+    const actionLabel =
+      reason === "NO_SHOW"
+        ? "Player No-Show"
+        : reason === "CANCELLED"
+        ? "Test Cancelled"
+        : "Ticket Closed";
+
+    await LogService.logAction(
+      channel.client,
+      actionLabel,
+      `<@${initiator.id}> ended duel session in #${channel.name}.\n` +
+      `**Challenger:** \`${playerIgn}\`\n` +
+      `**Ladder:** ${kit}\n` +
+      `**Reason:** ${actionLabel}`,
+      VY_COLORS.warning
+    );
+
+    // 4. Archive transcript
+    await this.archiveTranscript(
+      channel,
+      testerIgn,
+      playerIgn,
+      kit,
+      actionLabel
+    );
+
+    // 5. Notify inside channel and delete
+    await channel.send({
+      embeds: [
+        createWarningEmbed(
+          actionLabel,
+          `This duel ticket has been concluded (${actionLabel}).\n` +
+          `Queue status and tester availability have been updated.\n\n` +
+          `🔒 *Channel closing in 5 seconds...*`
+        ),
+      ],
+    }).catch(() => null);
+
+    setTimeout(async () => {
+      await channel.delete(`Duel ticket closed: ${actionLabel}`).catch(() => null);
+    }, 5000);
   }
 }

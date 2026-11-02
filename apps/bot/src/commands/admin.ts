@@ -12,11 +12,13 @@ import {
   Tier,
   STAFF_ROLES,
   StaffRole,
+  ROLE_MAP,
   calculatePoints,
+  compareTiers,
 } from "@vyntric/shared";
-import { createErrorEmbed, createSuccessEmbed } from "../embeds/brand";
-import { LogService } from "../services/logService";
-import { TierService } from "../services/tierService";
+import { createBaseEmbed, createErrorEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand.js";
+import { LogService } from "../services/logService.js";
+import { TierService } from "../services/tierService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("admin")
@@ -80,6 +82,40 @@ export const data = new SlashCommandBuilder()
           .setRequired(true)
           .addChoices(KITS.map((k) => ({ name: k.name, value: k.id })))
       )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("addtester")
+      .setDescription("Register a new tester to the Vyntric Testing Council")
+      .addUserOption((opt) => opt.setName("user").setDescription("Discord user").setRequired(true))
+      .addStringOption((opt) => opt.setName("ign").setDescription("Minecraft IGN").setRequired(true))
+      .addStringOption((opt) =>
+        opt
+          .setName("role")
+          .setDescription("Staff rank role")
+          .setRequired(true)
+          .addChoices(
+            STAFF_ROLES.map((r) => ({
+              name: r.label,
+              value: r.role,
+            }))
+          )
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName("specialties")
+          .setDescription("Comma-separated ladders (e.g. SWORD,AXE,CRYSTAL) or leave blank for all")
+          .setRequired(false)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("removetester")
+      .setDescription("Remove a user from the Vyntric Testing Council")
+      .addUserOption((opt) => opt.setName("user").setDescription("Discord user").setRequired(true))
+  )
+  .addSubcommand((sub) =>
+    sub.setName("stats").setDescription("View platform system and testing statistics")
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -93,6 +129,134 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ ephemeral: true });
 
   const sub = interaction.options.getSubcommand();
+
+  // --- STATS SUBCOMMAND ---
+  if (sub === "stats") {
+    const [
+      totalPlayers,
+      totalTests,
+      totalTesters,
+      onlineTesters,
+      activeQueues,
+      recentTests,
+    ] = await Promise.all([
+      prisma.player.count(),
+      prisma.test.count(),
+      prisma.tester.count(),
+      prisma.tester.count({ where: { status: { in: ["ONLINE", "TESTING"] } } }),
+      prisma.queueEntry.count({ where: { status: "WAITING" } }),
+      prisma.test.count({
+        where: {
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+      }),
+    ]);
+
+    const embed = createBaseEmbed("📊 VYNTRIC TIERS — SYSTEM METRICS")
+      .setColor(VY_COLORS.cyan)
+      .setDescription(
+        `### Platform Overview\n` +
+        `• **Registered Players:** \`${totalPlayers.toLocaleString()}\`\n` +
+        `• **Tests Completed (All-Time):** \`${totalTests.toLocaleString()}\`\n` +
+        `• **Tests in Last 24 Hours:** \`${recentTests}\`\n\n` +
+        `### Operations\n` +
+        `• **Testing Council Roster:** \`${totalTesters}\` (${onlineTesters} active)\n` +
+        `• **Challengers in Queue:** \`${activeQueues}\`\n` +
+        `• **Ladders Monitored:** \`9\`\n\n` +
+        `*Real-time synchronization active with Supabase and web platform.*`
+      );
+
+    return interaction.editReply({ embeds: [embed] });
+  }
+
+  // --- ADD TESTER SUBCOMMAND ---
+  if (sub === "addtester") {
+    const targetUser = interaction.options.getUser("user", true);
+    const ign = interaction.options.getString("ign", true).trim();
+    const role = interaction.options.getString("role", true) as StaffRole;
+    const rawSpecialties = interaction.options.getString("specialties");
+
+    let specialties: Kit[] = [];
+    if (rawSpecialties) {
+      specialties = rawSpecialties
+        .toUpperCase()
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s): s is Kit => KITS.some((k) => k.id === s));
+    }
+
+    if (specialties.length === 0) {
+      specialties = KITS.map((k) => k.id);
+    }
+
+    const tester = await prisma.tester.upsert({
+      where: { discordId: targetUser.id },
+      update: {
+        ign,
+        name: targetUser.displayName || targetUser.username,
+        role,
+        specialties,
+      },
+      create: {
+        discordId: targetUser.id,
+        ign,
+        name: targetUser.displayName || targetUser.username,
+        role,
+        specialties,
+        status: "OFFLINE",
+      },
+    });
+
+    await LogService.logAction(
+      interaction.client,
+      "Tester Registered",
+      `<@${interaction.user.id}> added <@${targetUser.id}> (\`${ign}\`) as **${ROLE_MAP[role]?.label || role}**.`
+    );
+
+    return interaction.editReply({
+      embeds: [
+        createSuccessEmbed(
+          "Tester Registered",
+          `<@${targetUser.id}> (\`${ign}\`) has been added to the Vyntric Testing Council as **${ROLE_MAP[role]?.label || role}**.\n` +
+          `Specialties: ${specialties.map((k) => KIT_MAP[k]?.emoji || k).join(" ")}`
+        ),
+      ],
+    });
+  }
+
+  // --- REMOVE TESTER SUBCOMMAND ---
+  if (sub === "removetester") {
+    const targetUser = interaction.options.getUser("user", true);
+
+    const existing = await prisma.tester.findUnique({
+      where: { discordId: targetUser.id },
+    });
+
+    if (!existing) {
+      return interaction.editReply({
+        embeds: [createErrorEmbed("Not a Tester", "That user is not registered as a tester.")],
+      });
+    }
+
+    await prisma.tester.delete({ where: { discordId: targetUser.id } });
+
+    await LogService.logAction(
+      interaction.client,
+      "Tester Removed",
+      `<@${interaction.user.id}> removed <@${targetUser.id}> (\`${existing.ign}\`) from the Testing Council.`
+    );
+
+    return interaction.editReply({
+      embeds: [
+        createSuccessEmbed(
+          "Tester Removed",
+          `<@${targetUser.id}> (\`${existing.ign}\`) has been removed from the Testing Council.`
+        ),
+      ],
+    });
+  }
+
+  // Commands requiring player IGN
   const ign = interaction.options.getString("ign", true).trim();
 
   const player = await prisma.player.findUnique({
@@ -106,14 +270,26 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
+  // --- SET TIER SUBCOMMAND ---
   if (sub === "settier") {
     const kit = interaction.options.getString("kit", true) as Kit;
     const tier = interaction.options.getString("tier", true) as Tier;
 
+    const existingTierRecord = await prisma.playerTier.findUnique({
+      where: { playerId_kit: { playerId: player.id, kit } },
+    });
+
+    // Check historical peak
+    const peakTier = existingTierRecord
+      ? compareTiers(tier, existingTierRecord.peakTier) < 0
+        ? tier
+        : existingTierRecord.peakTier
+      : tier;
+
     await prisma.playerTier.upsert({
       where: { playerId_kit: { playerId: player.id, kit } },
-      update: { tier, peakTier: tier },
-      create: { playerId: player.id, kit, tier, peakTier: tier },
+      update: { tier, peakTier },
+      create: { playerId: player.id, kit, tier, peakTier },
     });
 
     // Recalculate points
@@ -129,7 +305,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (interaction.guild) {
       const member = await interaction.guild.members.fetch(player.discordId).catch(() => null);
       if (member) {
-        await TierService.syncPlayerTierRole(interaction.guild, member, kit, tier);
+        await TierService.syncPlayerTierRole(interaction.guild, member, kit, tier, existingTierRecord?.tier);
         await TierService.syncTitleRole(interaction.guild, member, totalPoints);
       }
     }
@@ -150,6 +326,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
+  // --- REMOVE TIER SUBCOMMAND ---
   if (sub === "removetier") {
     const kit = interaction.options.getString("kit", true) as Kit;
 
@@ -176,6 +353,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
+  // --- BAN TESTS SUBCOMMAND ---
   if (sub === "ban-tests") {
     const reason = interaction.options.getString("reason", true);
     await prisma.player.update({ where: { id: player.id }, data: { banned: true } });
@@ -196,6 +374,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
+  // --- UNBAN TESTS SUBCOMMAND ---
   if (sub === "unban-tests") {
     await prisma.player.update({ where: { id: player.id }, data: { banned: false } });
 
@@ -215,6 +394,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
   }
 
+  // --- RESET COOLDOWN SUBCOMMAND ---
   if (sub === "resetcooldown") {
     const kit = interaction.options.getString("kit", true) as Kit;
     await prisma.cooldown.deleteMany({

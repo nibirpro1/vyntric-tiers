@@ -1,12 +1,13 @@
 import {
+  ActivityType,
   Client,
   GatewayIntentBits,
   Partials,
 } from "discord.js";
-import { config } from "./config";
-import { deployCommands } from "./deploy-commands";
-import { handleInteraction } from "./events/interactionCreate";
-import { QueueService } from "./services/queueService";
+import { config } from "./config.js";
+import { deployCommands } from "./deploy-commands.js";
+import { handleInteraction } from "./events/interactionCreate.js";
+import { QueueService } from "./services/queueService.js";
 
 export const client = new Client({
   intents: [
@@ -19,18 +20,47 @@ export const client = new Client({
 });
 
 client.once("ready", async () => {
-  console.log(`🤖 Vyntric Tiers Bot logged in as ${client.user?.tag}!`);
+  console.log(`🤖 ${config.BOT_NAME} logged in as ${client.user?.tag}!`);
+
+  // Set rich Discord status
+  client.user?.setPresence({
+    activities: [
+      {
+        name: `${config.WEBSITE_URL.replace(/^https?:\/\//, "")} • /help`,
+        type: ActivityType.Watching,
+      },
+    ],
+    status: "online",
+  });
 
   // Auto-deploy slash commands on startup
   await deployCommands();
 
-  // Setup / refresh queue panels
+  // Setup / refresh queue panels in #queue
   await QueueService.setupOrRefreshPanels(client);
   console.log("⚔️ Queue panels initialized.");
 });
 
 client.on("interactionCreate", async (interaction) => {
   await handleInteraction(interaction);
+});
+
+// Robust Discord client error handling
+client.on("error", (error) => {
+  console.error("❌ Discord Client Error:", error);
+});
+
+client.on("warn", (warning) => {
+  console.warn("⚠️ Discord Client Warning:", warning);
+});
+
+// Prevent unhandled crashes in production
+process.on("unhandledRejection", (reason) => {
+  console.error("❌ Unhandled Promise Rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
 });
 
 // Start bot if token provided

@@ -2,25 +2,33 @@ import {
   ButtonInteraction,
   ChatInputCommandInteraction,
   Interaction,
+  PermissionFlagsBits,
   TextChannel,
 } from "discord.js";
 import { Kit, KIT_MAP } from "@vyntric/shared";
-import { prisma } from "@vyntric/db";
-import { createBaseEmbed, createErrorEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand";
-import { QueueService } from "../services/queueService";
-import { LogService } from "../services/logService";
+import { config } from "../config.js";
+import {
+  createBaseEmbed,
+  createErrorEmbed,
+  createSuccessEmbed,
+  VY_BRAND,
+  VY_COLORS,
+} from "../embeds/brand.js";
+import { QueueService } from "../services/queueService.js";
+import { TestService } from "../services/testService.js";
 
 // Map of loaded commands
-import * as registerCmd from "../commands/register";
-import * as testerCmd from "../commands/tester";
-import * as nextCmd from "../commands/next";
-import * as resultCmd from "../commands/result";
-import * as profileCmd from "../commands/profile";
-import * as leaderboardCmd from "../commands/leaderboard";
-import * as queueCmd from "../commands/queue";
-import * as cooldownCmd from "../commands/cooldown";
-import * as testersCmd from "../commands/testers";
-import * as adminCmd from "../commands/admin";
+import * as registerCmd from "../commands/register.js";
+import * as testerCmd from "../commands/tester.js";
+import * as nextCmd from "../commands/next.js";
+import * as resultCmd from "../commands/result.js";
+import * as profileCmd from "../commands/profile.js";
+import * as leaderboardCmd from "../commands/leaderboard.js";
+import * as queueCmd from "../commands/queue.js";
+import * as cooldownCmd from "../commands/cooldown.js";
+import * as testersCmd from "../commands/testers.js";
+import * as adminCmd from "../commands/admin.js";
+import * as helpCmd from "../commands/help.js";
 
 export const commands = new Map<string, any>([
   [registerCmd.data.name, registerCmd],
@@ -33,6 +41,7 @@ export const commands = new Map<string, any>([
   [cooldownCmd.data.name, cooldownCmd],
   [testersCmd.data.name, testersCmd],
   [adminCmd.data.name, adminCmd],
+  [helpCmd.data.name, helpCmd],
 ]);
 
 export async function handleInteraction(interaction: Interaction) {
@@ -110,52 +119,90 @@ async function handleButton(interaction: ButtonInteraction) {
       .setDescription(
         `### Ladder Guidelines\n` +
         `• **Format:** First-to-5 Duels (FT5).\n` +
-        `• **Average Duration:** 8-15 minutes.\n` +
+        `• **Average Duration:** 8–15 minutes.\n` +
         `• **Allowed Clients:** Lunar, Badlion, Feather, Vanilla, Fabric (standard competitive mods only).\n` +
         `• **Ping Rules:** If latency difference exceeds 60ms, duel on neutral or balanced host.\n\n` +
         `### Cooldown Policies\n` +
         `• **Promotion:** 14-day ladder cooldown.\n` +
         `• **Retention / Failure:** 7-day ladder cooldown.\n` +
-        `• **Demotion:** 3-day ladder cooldown.`
+        `• **Demotion:** 3-day ladder cooldown.\n\n` +
+        `*Click [Join Queue] on the main panel when you are warmed up and ready!*`
       );
 
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // --- TICKET BUTTONS ---
+  // --- TICKET CONTROL BUTTONS ---
+  if (!(interaction.channel instanceof TextChannel)) return;
+
+  const topic = interaction.channel.topic || "";
+  const isTicketChannel = topic.toLowerCase().includes("vyntric pvp tier test");
+
+  if (!isTicketChannel) {
+    return interaction.reply({
+      embeds: [createErrorEmbed("Invalid Action", "This button can only be used inside a Vyntric test ticket channel.")],
+      ephemeral: true,
+    });
+  }
+
+  // Permission check: Tester, Head Tester, or Admin
+  const isStaff =
+    interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+    (config.ROLE_HEAD_TESTER_ID &&
+      interaction.guild?.members.cache.get(interaction.user.id)?.roles.cache.has(config.ROLE_HEAD_TESTER_ID)) ||
+    (config.ROLE_TESTER_ID &&
+      interaction.guild?.members.cache.get(interaction.user.id)?.roles.cache.has(config.ROLE_TESTER_ID));
+
   if (customId === "ticket_start") {
     return interaction.reply({
-      content: `⏱ **Test Commenced!** Tester <@${interaction.user.id}> has started the duel timer. Best of luck!`,
+      content: `⏱ **Test Commenced!** Tester <@${interaction.user.id}> has officially started the duel timer. Best of luck to both combatants!`,
     });
   }
 
   if (customId === "ticket_noshow") {
-    if (!(interaction.channel instanceof TextChannel)) return;
-    await interaction.reply({
-      content: `⚠️ **Player marked as No-Show.** This ticket will close in 10 seconds.`,
-    });
+    if (!isStaff) {
+      return interaction.reply({
+        embeds: [createErrorEmbed("Permission Denied", "Only the assigned tester or staff may mark a player as no-show.")],
+        ephemeral: true,
+      });
+    }
 
-    await LogService.logAction(
-      interaction.client,
-      "Test No-Show",
-      `Tester <@${interaction.user.id}> marked ticket ${interaction.channel.name} as a Player No-Show.`
+    await interaction.deferReply();
+    await TestService.handleTicketCancellation(
+      interaction.channel,
+      interaction.user,
+      "NO_SHOW"
     );
-
-    setTimeout(async () => {
-      await interaction.channel?.delete("Player no-show").catch(() => null);
-    }, 10000);
+    await QueueService.setupOrRefreshPanels(interaction.client);
     return;
   }
 
-  if (customId === "ticket_cancel" || customId === "ticket_close") {
-    if (!(interaction.channel instanceof TextChannel)) return;
-    await interaction.reply({
-      content: `🔒 **Closing ticket channel in 5 seconds...**`,
-    });
+  if (customId === "ticket_cancel") {
+    if (!isStaff) {
+      return interaction.reply({
+        embeds: [createErrorEmbed("Permission Denied", "Only the tester or staff may cancel an active test.")],
+        ephemeral: true,
+      });
+    }
 
-    setTimeout(async () => {
-      await interaction.channel?.delete("Ticket closed by user").catch(() => null);
-    }, 5000);
+    await interaction.deferReply();
+    await TestService.handleTicketCancellation(
+      interaction.channel,
+      interaction.user,
+      "CANCELLED"
+    );
+    await QueueService.setupOrRefreshPanels(interaction.client);
+    return;
+  }
+
+  if (customId === "ticket_close") {
+    await interaction.deferReply();
+    await TestService.handleTicketCancellation(
+      interaction.channel,
+      interaction.user,
+      "MANUAL_CLOSE"
+    );
+    await QueueService.setupOrRefreshPanels(interaction.client);
     return;
   }
 }

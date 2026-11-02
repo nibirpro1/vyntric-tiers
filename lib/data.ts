@@ -1157,7 +1157,139 @@ export function recordTestResult(record: any) {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// ADMIN & COUNCIL MASTER MUTATION API
+// ---------------------------------------------------------------------------
+
+let siteAnnouncement = {
+  enabled: false,
+  message: "Official Vyntric Tier Testing is OPEN. Open a queue ticket to challenge accredited testers.",
+  type: "info" as "alert" | "info" | "event",
+};
+
+export function getSiteAnnouncement() {
+  return siteAnnouncement;
+}
+
+export function setSiteAnnouncement(data: Partial<typeof siteAnnouncement>) {
+  siteAnnouncement = { ...siteAnnouncement, ...data };
+  return siteAnnouncement;
+}
+
+export function addOrUpdatePlayer(playerData: Partial<Player> & { username: string }): Player {
+  const existingIdx = PLAYERS.findIndex(
+    (p) => p.username.toLowerCase() === playerData.username.toLowerCase() || (playerData.id && p.id === playerData.id)
+  );
+
+  let target: Player;
+
+  if (existingIdx >= 0) {
+    target = {
+      ...PLAYERS[existingIdx],
+      ...playerData,
+      kits: { ...PLAYERS[existingIdx].kits, ...(playerData.kits || {}) },
+    };
+    PLAYERS[existingIdx] = target;
+  } else {
+    const rawKits = playerData.kits || {};
+    target = {
+      id: playerData.id || `p-${playerData.username.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+      username: playerData.username,
+      ign: playerData.username,
+      uuid: playerData.username,
+      region: playerData.region || "NA",
+      points: playerData.points || 0,
+      globalRank: PLAYERS.length + 1,
+      combatTitle: "Combat Novice",
+      kits: rawKits,
+      tiers: rawKits,
+      testHistory: [],
+      joinedAt: "Just now",
+      lastTestedAt: new Date().toISOString(),
+      discord: playerData.discord || `@${playerData.username.toLowerCase()}`,
+    };
+    PLAYERS.push(target);
+  }
+
+  // Calculate live points from kits
+  let calculatedPts = 0;
+  for (const [_, kData] of Object.entries(target.kits)) {
+    if (kData && kData.tier && TIER_POINTS[kData.tier]) {
+      calculatedPts += TIER_POINTS[kData.tier] || 0;
+    }
+  }
+  if (calculatedPts > 0 || !playerData.points) {
+    target.points = calculatedPts;
+    target.totalPoints = calculatedPts;
+  }
+  target.combatTitle = getTitle(target.points).name;
+
+  // Re-rank all players
+  PLAYERS.sort((a, b) => b.points - a.points);
+  PLAYERS.forEach((p, idx) => {
+    p.globalRank = idx + 1;
+  });
+
+  return target;
+}
+
+export function deletePlayer(idOrUsername: string): boolean {
+  const clean = idOrUsername.toLowerCase();
+  const idx = PLAYERS.findIndex((p) => p.id.toLowerCase() === clean || p.username.toLowerCase() === clean);
+  if (idx === -1) return false;
+  PLAYERS.splice(idx, 1);
+  PLAYERS.forEach((p, i) => {
+    p.globalRank = i + 1;
+  });
+  return true;
+}
+
+export function deleteTestRecord(testId: string): boolean {
+  const idx = RECENT_TESTS.findIndex((t) => t.id === testId);
+  if (idx === -1) return false;
+  RECENT_TESTS.splice(idx, 1);
+  return true;
+}
+
+export function addOrUpdateTester(memberData: Partial<Member> & { name: string; ign: string }): Member {
+  const existingIdx = VYNTRIC_MEMBERS.findIndex(
+    (m) => m.ign.toLowerCase() === memberData.ign.toLowerCase() || m.id === memberData.id
+  );
+
+  if (existingIdx >= 0) {
+    VYNTRIC_MEMBERS[existingIdx] = {
+      ...VYNTRIC_MEMBERS[existingIdx],
+      ...memberData,
+    };
+    return VYNTRIC_MEMBERS[existingIdx];
+  } else {
+    const newMember: Member = {
+      id: memberData.id || `mem-${Date.now()}`,
+      name: memberData.name,
+      ign: memberData.ign,
+      role: memberData.role || "OFFICIAL TESTER",
+      avatarUrl: `https://mc-heads.net/head/${memberData.ign}/128`,
+      discord: memberData.discord || `@${memberData.ign.toLowerCase()}`,
+      testsCompleted: memberData.testsCompleted || 0,
+      specialties: memberData.specialties || ["Sword" as KitId],
+      joinDate: memberData.joinDate || "Recent",
+      status: memberData.status || "ONLINE",
+      quote: memberData.quote || "Accredited Vyntric Tier Tester.",
+    };
+    VYNTRIC_MEMBERS.push(newMember);
+    return newMember;
+  }
+}
+
 export const dataStore = {
+  addOrUpdatePlayer,
+  deletePlayer,
+  deleteTestRecord,
+  addOrUpdateTester,
+  getSiteAnnouncement,
+  setSiteAnnouncement,
+
   getPlayers: () => PLAYERS,
   getPlayerByUsername,
   getPlayerById,

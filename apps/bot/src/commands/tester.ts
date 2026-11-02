@@ -3,10 +3,10 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { prisma } from "@vyntric/db";
-import { config } from "../config";
-import { createErrorEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand";
-import { LogService } from "../services/logService";
-import { TierService } from "../services/tierService";
+import { config } from "../config.js";
+import { createErrorEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand.js";
+import { LogService } from "../services/logService.js";
+import { TierService } from "../services/tierService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("tester")

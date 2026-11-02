@@ -1,6 +1,6 @@
 import { Client, TextChannel, EmbedBuilder } from "discord.js";
-import { config } from "../config";
-import { createBaseEmbed, VY_COLORS } from "../embeds/brand";
+import { config } from "../config.js";
+import { createBaseEmbed, VY_COLORS } from "../embeds/brand.js";
 
 export class LogService {
   public static async logAction(

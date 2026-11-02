@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      '@vyntric/shared': path.resolve(__dirname, './packages/shared/src/index.ts'),
+      '@vyntric/db': path.resolve(__dirname, './packages/db/src/index.ts'),
     },
   },
 });

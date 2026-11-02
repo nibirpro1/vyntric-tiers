@@ -19,8 +19,8 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@vyntric/shared": ["./packages/shared/dist/index.d.ts"],
-      "@vyntric/db": ["./packages/db/dist/index.d.ts"]
+      "@vyntric/shared": ["./packages/shared/src/index.ts"],
+      "@vyntric/db": ["./packages/db/src/index.ts"]
     }
   },
   "include": [

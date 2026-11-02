@@ -4,8 +4,8 @@ import {
 } from "discord.js";
 import { prisma } from "@vyntric/db";
 import { KIT_MAP, Kit, ROLE_MAP, StaffRole } from "@vyntric/shared";
-import { createBaseEmbed, VY_COLORS } from "../embeds/brand";
-import { config } from "../config";
+import { createBaseEmbed, VY_COLORS } from "../embeds/brand.js";
+import { config } from "../config.js";
 
 export const data = new SlashCommandBuilder()
   .setName("testers")

@@ -1,6 +1,6 @@
 import { REST, Routes } from "discord.js";
-import { config } from "./config";
-import { commands } from "./events/interactionCreate";
+import { config } from "./config.js";
+import { commands } from "./events/interactionCreate.js";
 
 export async function deployCommands() {
   const commandData = Array.from(commands.values()).map((c) => c.data.toJSON());

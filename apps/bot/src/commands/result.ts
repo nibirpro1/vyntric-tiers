@@ -4,9 +4,9 @@ import {
   TextChannel,
 } from "discord.js";
 import { TIER_ORDER, Tier, Kit } from "@vyntric/shared";
-import { createErrorEmbed } from "../embeds/brand";
-import { TestService } from "../services/testService";
-import { QueueService } from "../services/queueService";
+import { createErrorEmbed } from "../embeds/brand.js";
+import { TestService } from "../services/testService.js";
+import { QueueService } from "../services/queueService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("result")

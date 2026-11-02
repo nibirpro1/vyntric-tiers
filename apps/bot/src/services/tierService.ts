@@ -1,7 +1,7 @@
 import { Guild, GuildMember } from "discord.js";
 import { Tier, Kit, KIT_MAP, TIER_COLORS, getTitle } from "@vyntric/shared";
 import { prisma } from "@vyntric/db";
-import { config } from "../config";
+import { config } from "../config.js";
 
 export class TierService {
   /**

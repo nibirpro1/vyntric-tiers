@@ -4,7 +4,7 @@ import {
 } from "discord.js";
 import { prisma } from "@vyntric/db";
 import { Kit, KIT_MAP } from "@vyntric/shared";
-import { createBaseEmbed, createErrorEmbed, VY_COLORS } from "../embeds/brand";
+import { createBaseEmbed, createErrorEmbed, VY_COLORS } from "../embeds/brand.js";
 
 export const data = new SlashCommandBuilder()
   .setName("cooldown")

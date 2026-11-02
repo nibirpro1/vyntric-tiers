@@ -4,14 +4,14 @@ import {
 } from "discord.js";
 import { REGIONS, Region, REGION_MAP } from "@vyntric/shared";
 import { prisma } from "@vyntric/db";
-import { config } from "../config";
+import { config } from "../config.js";
 import {
   createErrorEmbed,
   createPlayerHeadUrl,
   createSuccessEmbed,
   VY_COLORS,
-} from "../embeds/brand";
-import { MojangService } from "../services/mojangService";
+} from "../embeds/brand.js";
+import { MojangService } from "../services/mojangService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("register")

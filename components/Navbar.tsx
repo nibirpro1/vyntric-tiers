@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -38,6 +38,7 @@ export function Navbar({ onSelectPlayer: propOnSelectPlayer, onOpenInfo: propOnO
   const onSelectPlayer = propOnSelectPlayer || setSelectedPlayer;
   const onOpenInfo = propOnOpenInfo || (() => setInfoModalOpen(true));
   const pathname = usePathname();
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -54,9 +55,14 @@ export function Navbar({ onSelectPlayer: propOnSelectPlayer, onOpenInfo: propOnO
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Keyboard shortcut CMD+K / Ctrl+K focuses the single search bar
+  // Keyboard shortcuts: CMD+K / Ctrl+K for search, Secret CMD+Shift+A / Ctrl+Shift+A for Admin Suite
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        router.push("/admin");
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         searchInputRef.current?.focus();
@@ -68,7 +74,7 @@ export function Navbar({ onSelectPlayer: propOnSelectPlayer, onOpenInfo: propOnO
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [router]);
 
   // Close search dropdown on click outside
   useEffect(() => {

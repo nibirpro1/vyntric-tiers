@@ -5,8 +5,8 @@ import {
 } from "discord.js";
 import { prisma } from "@vyntric/db";
 import { KITS, Kit, KIT_MAP } from "@vyntric/shared";
-import { createBaseEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand";
-import { QueueService } from "../services/queueService";
+import { createBaseEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand.js";
+import { QueueService } from "../services/queueService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("queue")

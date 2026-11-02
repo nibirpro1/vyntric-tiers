@@ -4,14 +4,15 @@ import {
 } from "discord.js";
 import { prisma } from "@vyntric/db";
 import { KIT_MAP, Kit, REGION_MAP, Region, getTitle } from "@vyntric/shared";
-import { config } from "../config";
+import { config } from "../config.js";
 import {
   createBaseEmbed,
   createErrorEmbed,
   createPlayerHeadUrl,
   createPlayerSkinUrl,
+  VY_BRAND,
   VY_COLORS,
-} from "../embeds/brand";
+} from "../embeds/brand.js";
 
 export const data = new SlashCommandBuilder()
   .setName("profile")
@@ -37,20 +38,29 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   let player = null;
 
+  const includePayload = {
+    tiers: true,
+    tests: {
+      take: 3,
+      orderBy: { createdAt: "desc" as const },
+      include: { tester: true },
+    },
+  };
+
   if (targetIgn) {
     player = await prisma.player.findUnique({
       where: { ign: targetIgn },
-      include: { tiers: true, tests: { take: 5, orderBy: { createdAt: "desc" } } },
+      include: includePayload,
     });
   } else if (targetUser) {
     player = await prisma.player.findUnique({
       where: { discordId: targetUser.id },
-      include: { tiers: true, tests: { take: 5, orderBy: { createdAt: "desc" } } },
+      include: includePayload,
     });
   } else {
     player = await prisma.player.findUnique({
       where: { discordId: interaction.user.id },
-      include: { tiers: true, tests: { take: 5, orderBy: { createdAt: "desc" } } },
+      include: includePayload,
     });
   }
 
@@ -80,16 +90,43 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           .map((t) => {
             const kitMeta = KIT_MAP[t.kit as Kit];
             const peakText = t.peakTier !== t.tier ? ` *(Peak: ${t.peakTier})*` : "";
-            return `${kitMeta.emoji} **${kitMeta.name}:** \`${t.tier}\`${peakText}`;
+            return `${kitMeta ? kitMeta.emoji : "⚔️"} **${kitMeta ? kitMeta.name : t.kit}:** \`${t.tier}\`${peakText}`;
           })
           .join("\n")
-      : "*No verified kit placements yet.*";
+      : "*No verified ladder placements yet.*";
+
+  // Recent tests list
+  const recentTestsLines =
+    player.tests.length > 0
+      ? player.tests
+          .map((test) => {
+            const kitMeta = KIT_MAP[test.kit as Kit];
+            const resultEmoji =
+              test.result === "PROMOTED"
+                ? "🔺"
+                : test.result === "DEMOTED"
+                ? "🔻"
+                : test.result === "RETAINED"
+                ? "⚖️"
+                : "🌟";
+            const dateStr = new Date(test.createdAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            });
+            return `• ${kitMeta ? kitMeta.emoji : ""} **${test.newTier}** (\`${test.score}\`) ${resultEmoji} vs **${test.tester.ign}** • *${dateStr}*`;
+          })
+          .join("\n")
+      : "*No recorded duel tests yet.*";
 
   const embed = createBaseEmbed()
     .setColor(title.color ? parseInt(title.color.replace("#", ""), 16) : VY_COLORS.primary)
-    .setTitle(`${player.ign} — Competitive Profile`)
+    .setAuthor({
+      name: `${player.ign.toUpperCase()} • COMPETITIVE DOSSIER`,
+      iconURL: VY_BRAND.swordIcon,
+      url: `${config.WEBSITE_URL}/player/${player.ign}`,
+    })
+    .setTitle(`${player.ign} — Profile Overview`)
     .setThumbnail(createPlayerHeadUrl(player.uuid || player.ign))
-    .setImage(createPlayerSkinUrl(player.uuid || player.ign))
     .setDescription(
       `**Region:** ${regionMeta?.flag || ""} ${regionMeta?.name || player.region}\n` +
       `**Title:** \`${title.name}\` (${player.points} pts)\n` +
@@ -97,8 +134,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       `**Discord:** <@${player.discordId}>\n\n` +
       `### Verified Ladders\n` +
       `${tierLines}\n\n` +
+      `### Recent Verified Tests\n` +
+      `${recentTestsLines}\n\n` +
       `🔗 [View Interactive Web Dossier](${config.WEBSITE_URL}/player/${player.ign})`
-    );
+    )
+    .setFooter({
+      text: `${VY_BRAND.footerText} • Rank #${rank}`,
+      iconURL: VY_BRAND.logoIcon,
+    });
 
   return interaction.editReply({ embeds: [embed] });
 }
