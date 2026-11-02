@@ -19,6 +19,7 @@ import {
 import { createBaseEmbed, createErrorEmbed, createSuccessEmbed, VY_COLORS } from "../embeds/brand.js";
 import { LogService } from "../services/logService.js";
 import { TierService } from "../services/tierService.js";
+import { GuildSetupService } from "../services/guildSetupService.js";
 
 export const data = new SlashCommandBuilder()
   .setName("admin")
@@ -116,6 +117,11 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub.setName("stats").setDescription("View platform system and testing statistics")
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("setup")
+      .setDescription("Automatically create all Vyntric channels, categories, and roles in this server")
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -167,6 +173,53 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       );
 
     return interaction.editReply({ embeds: [embed] });
+  }
+
+  // --- AUTOMATED SERVER SETUP SUBCOMMAND ---
+  if (sub === "setup") {
+    if (!interaction.guild) {
+      return interaction.editReply({
+        embeds: [createErrorEmbed("Error", "This command can only be used inside a Discord server.")],
+      });
+    }
+
+    try {
+      const res = await GuildSetupService.executeSetup(interaction.guild);
+
+      const queueList = Array.from(res.queueChannels.entries())
+        .map(([kit, ch]) => `• ${KIT_MAP[kit].emoji} **${KIT_MAP[kit].name}:** <#${ch.id}>`)
+        .join("\n");
+
+      const embed = createBaseEmbed("⚙️ VYNTRIC TIERS — AUTOMATED SERVER SETUP COMPLETE")
+        .setColor(VY_COLORS.green)
+        .setDescription(
+          `All channels, categories, and roles have been automatically created and configured!\n\n` +
+          `### 🏷️ Created Roles\n` +
+          `• **Registered:** <@&${res.roles.registered.id}>\n` +
+          `• **Tester:** <@&${res.roles.tester.id}>\n` +
+          `• **Active Tester:** <@&${res.roles.activeTester.id}>\n` +
+          `• **Head Tester:** <@&${res.roles.headTester.id}>\n\n` +
+          `### ⚔️ Dedicated Gamemode Queue Channels (9)\n` +
+          `${queueList}\n\n` +
+          `### 📁 Additional Channels\n` +
+          `• **Results Feed:** <#${res.channels.results.id}>\n` +
+          `• **Ticket Category:** \`${res.categories.tickets.name}\` (\`${res.categories.tickets.id}\`)\n` +
+          `• **Duel Transcripts:** <#${res.channels.transcripts.id}>\n` +
+          `• **Staff Logs:** <#${res.channels.staffLogs.id}>\n\n` +
+          `✅ *Bot configuration and .env file have been updated automatically!*`
+        );
+
+      return interaction.editReply({ embeds: [embed] });
+    } catch (err: any) {
+      return interaction.editReply({
+        embeds: [
+          createErrorEmbed(
+            "Setup Failed",
+            `An error occurred while creating channels or roles: ${err.message}\nMake sure the bot's role is positioned at the top of the Server Roles hierarchy and has Administrator or Manage Roles/Channels permissions.`
+          ),
+        ],
+      });
+    }
   }
 
   // --- ADD TESTER SUBCOMMAND ---

@@ -11,6 +11,10 @@ import {
   getSiteAnnouncement,
   setSiteAnnouncement,
   recordTestResult,
+  getSiteSettings,
+  updateSiteSettings,
+  getAllData,
+  restoreAllData,
 } from "@/lib/data";
 
 const VALID_PASSPHRASE = process.env.STAFF_PASSPHRASE || "vyntric2026";
@@ -38,6 +42,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     authenticated: true,
     stats: dataStore.getStats(),
+    settings: getSiteSettings(),
     announcement: getSiteAnnouncement(),
     totalPlayers: PLAYERS.length,
     totalTests: RECENT_TESTS.length,
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
         success: true,
         authenticated: true,
         token: TOKEN_VALUE,
-        message: "Master Admin access authorized.",
+        message: "Master Vault access authorized.",
       });
 
       response.cookies.set({
@@ -85,7 +90,7 @@ export async function POST(request: NextRequest) {
       const response = NextResponse.json({
         success: true,
         authenticated: false,
-        message: "Logged out from Master Admin.",
+        message: "Logged out from Master Vault.",
       });
       response.cookies.delete(AUTH_COOKIE_NAME);
       return response;
@@ -189,10 +194,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 6. SITE ANNOUNCEMENT ACTIONS
+    // 6. SITE SETTINGS & ANNOUNCEMENT
+    if (action === "update_settings") {
+      const { settings } = body;
+      const updated = updateSiteSettings(settings);
+      return NextResponse.json({
+        success: true,
+        settings: updated,
+      });
+    }
+
     if (action === "update_announcement") {
       const { announcement } = body;
       const updated = setSiteAnnouncement(announcement);
+      updateSiteSettings({ announcement: updated });
       return NextResponse.json({
         success: true,
         announcement: updated,
@@ -204,12 +219,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         exportedAt: new Date().toISOString(),
-        data: {
-          players: PLAYERS,
-          tests: RECENT_TESTS,
-          staff: VYNTRIC_MEMBERS,
-          announcement: getSiteAnnouncement(),
-        },
+        data: getAllData(),
+      });
+    }
+
+    if (action === "restore_backup") {
+      const { data } = body;
+      if (!data) {
+        return NextResponse.json({ error: "No backup data provided" }, { status: 400 });
+      }
+      const restored = restoreAllData(data);
+      return NextResponse.json({
+        success: restored,
+        totalPlayers: PLAYERS.length,
+        totalTests: RECENT_TESTS.length,
+        totalStaff: VYNTRIC_MEMBERS.length,
       });
     }
 

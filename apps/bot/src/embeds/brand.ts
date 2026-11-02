@@ -18,8 +18,20 @@ export const VY_BRAND = {
   tagline: "Ranked. Tested. Verified.",
   footerText: "Vyntric Tiers • Ranked. Tested. Verified.",
   logoIcon: "https://mc-heads.net/head/MHF_Chest/64",
-  swordIcon: "https://mc-heads.net/head/MHF_Sword/64",
+  swordIcon: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/diamond_sword.png",
   websiteUrl: config.WEBSITE_URL || "https://vyntric.gg",
+};
+
+export const MINECRAFT_ITEM_ICONS: Record<Kit, string> = {
+  SWORD: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/diamond_sword.png",
+  AXE: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/diamond_axe.png",
+  CRYSTAL: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/end_crystal.png",
+  POT: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/splash_potion.png",
+  UHC: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/golden_apple.png",
+  SMP: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/totem_of_undying.png",
+  MACE: "https://assets.mcasset.cloud/1.21/assets/minecraft/textures/item/mace.png",
+  DIASMP: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/diamond_chestplate.png",
+  VANILLA: "https://assets.mcasset.cloud/1.20.4/assets/minecraft/textures/item/bow.png",
 };
 
 export function createBaseEmbed(title?: string): EmbedBuilder {

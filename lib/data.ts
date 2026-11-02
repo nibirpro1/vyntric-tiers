@@ -1282,7 +1282,87 @@ export function addOrUpdateTester(memberData: Partial<Member> & { name: string; 
   }
 }
 
+
+export interface SiteSettings {
+  heroTitle: string;
+  heroSubtitle: string;
+  discordInviteUrl: string;
+  totalTestsOverride: number;
+  maintenanceMode: boolean;
+  announcement: {
+    enabled: boolean;
+    message: string;
+    type: "alert" | "info" | "event";
+  };
+}
+
+let siteSettings: SiteSettings = {
+  heroTitle: "Your next Minecraft rank starts here.",
+  heroSubtitle: "Find your tier, get audited by accredited testers in live duels, and dominate the official competitive standings.",
+  discordInviteUrl: "https://discord.gg/RESuGyFwJ3",
+  totalTestsOverride: 1248,
+  maintenanceMode: false,
+  announcement: {
+    enabled: false,
+    message: "Official Vyntric Tier Testing is OPEN. Open a queue ticket on Discord to challenge accredited council testers.",
+    type: "info",
+  },
+};
+
+export function getSiteSettings(): SiteSettings {
+  return siteSettings;
+}
+
+export function updateSiteSettings(updates: Partial<SiteSettings>): SiteSettings {
+  siteSettings = {
+    ...siteSettings,
+    ...updates,
+    announcement: {
+      ...siteSettings.announcement,
+      ...(updates.announcement || {}),
+    },
+  };
+  return siteSettings;
+}
+
+export function getAllData() {
+  return {
+    players: PLAYERS,
+    tests: RECENT_TESTS,
+    staff: VYNTRIC_MEMBERS,
+    settings: siteSettings,
+  };
+}
+
+export function restoreAllData(data: any): boolean {
+  try {
+    if (data.players && Array.isArray(data.players)) {
+      PLAYERS.length = 0;
+      PLAYERS.push(...data.players);
+    }
+    if (data.tests && Array.isArray(data.tests)) {
+      RECENT_TESTS.length = 0;
+      RECENT_TESTS.push(...data.tests);
+    }
+    if (data.staff && Array.isArray(data.staff)) {
+      VYNTRIC_MEMBERS.length = 0;
+      VYNTRIC_MEMBERS.push(...data.staff);
+    }
+    if (data.settings) {
+      updateSiteSettings(data.settings);
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to restore all data:", err);
+    return false;
+  }
+}
+
 export const dataStore = {
+  getSiteSettings,
+  updateSiteSettings,
+  getAllData,
+  restoreAllData,
   addOrUpdatePlayer,
   deletePlayer,
   deleteTestRecord,

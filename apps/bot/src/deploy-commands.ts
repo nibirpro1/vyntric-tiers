@@ -32,6 +32,4 @@ export async function deployCommands() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  deployCommands();
-}
+deployCommands().catch(console.error);

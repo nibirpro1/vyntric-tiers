@@ -11,11 +11,16 @@ import {
   createBaseEmbed,
   createErrorEmbed,
   createSuccessEmbed,
+  createWarningEmbed,
   VY_BRAND,
   VY_COLORS,
 } from "../embeds/brand.js";
-import { QueueService } from "../services/queueService.js";
+import { QueueService, memoryPlayers } from "../services/queueService.js";
 import { TestService } from "../services/testService.js";
+import { VerifyService } from "../services/verifyService.js";
+import { LadderRoleService } from "../services/ladderRoleService.js";
+import { SupportTicketService } from "../services/supportTicketService.js";
+import { recentVerifiedAccounts } from "../services/mcVerifyServer.js";
 
 // Map of loaded commands
 import * as registerCmd from "../commands/register.js";
@@ -29,6 +34,9 @@ import * as cooldownCmd from "../commands/cooldown.js";
 import * as testersCmd from "../commands/testers.js";
 import * as adminCmd from "../commands/admin.js";
 import * as helpCmd from "../commands/help.js";
+import * as testCmd from "../commands/test.js";
+import * as closeCmd from "../commands/close.js";
+import * as leaveCmd from "../commands/leave.js";
 
 export const commands = new Map<string, any>([
   [registerCmd.data.name, registerCmd],
@@ -42,6 +50,9 @@ export const commands = new Map<string, any>([
   [testersCmd.data.name, testersCmd],
   [adminCmd.data.name, adminCmd],
   [helpCmd.data.name, helpCmd],
+  [testCmd.data.name, testCmd],
+  [closeCmd.data.name, closeCmd],
+  [leaveCmd.data.name, leaveCmd],
 ]);
 
 export async function handleInteraction(interaction: Interaction) {
@@ -69,47 +80,144 @@ export async function handleInteraction(interaction: Interaction) {
   // 2. Handle Button Interactions
   if (interaction.isButton()) {
     await handleButton(interaction);
+    return;
+  }
+
+  // 3. Handle Modal Submissions (MCTiers Verification & Waitlist)
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === "mctiers_verify_modal") {
+      await VerifyService.handleVerifyModalSubmit(interaction);
+    } else if (interaction.customId.startsWith("waitlist_modal_")) {
+      const kit = interaction.customId.replace("waitlist_modal_", "") as Kit;
+      await QueueService.handleWaitlistModalSubmit(interaction, kit);
+    }
+    return;
+  }
+
+  // 4. Handle String Select Menus (Gamemode picker & Support Tickets)
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === "ladder_role_select") {
+      await LadderRoleService.handleLadderSelect(interaction);
+    } else if (interaction.customId === "support_ticket_select") {
+      await SupportTicketService.handleTicketSelect(interaction);
+    }
+    return;
   }
 }
 
 async function handleButton(interaction: ButtonInteraction) {
   const customId = interaction.customId;
 
-  // --- QUEUE BUTTONS ---
-  if (customId.startsWith("queue_join_")) {
-    const kit = customId.replace("queue_join_", "") as Kit;
-    await interaction.deferReply({ ephemeral: true });
-
-    const result = await QueueService.joinQueue(interaction.user.id, kit);
-    if (!result.success) {
-      return interaction.editReply({
-        embeds: [createErrorEmbed("Cannot Join Queue", result.message)],
+  // --- MCTIERS DIRECT CONNECT & VERIFICATION BUTTONS (Screenshot 3) ---
+  if (customId.startsWith("waitlist_verify_") || customId === "mctiers_verify_open") {
+    const memPlayer = memoryPlayers.get(interaction.user.id);
+    if (memPlayer) {
+      return interaction.reply({
+        content: `✅ You are already verified as **${memPlayer.ign}** [${memPlayer.region}]! Click **[Enter Waitlist]** directly.`,
+        ephemeral: true,
       });
     }
 
-    await QueueService.setupOrRefreshPanels(interaction.client);
-    return interaction.editReply({
-      embeds: [createSuccessEmbed("Queue Joined", result.message)],
+    const embed = VerifyService.createDirectConnectEmbed(interaction.user.id);
+    const row = VerifyService.createDirectConnectButtons();
+    return interaction.reply({
+      embeds: [embed],
+      components: [row],
+      ephemeral: true,
     });
   }
 
-  if (customId.startsWith("queue_leave_")) {
-    const kit = customId.replace("queue_leave_", "") as Kit;
-    await interaction.deferReply({ ephemeral: true });
+  if (customId === "verify_instant_modal") {
+    return interaction.showModal(VerifyService.createVerifyModal());
+  }
 
-    const result = await QueueService.leaveQueue(interaction.user.id, kit);
-    if (!result.success) {
-      return interaction.editReply({
-        embeds: [createErrorEmbed("Cannot Leave Queue", result.message)],
+  if (customId === "verify_check_status") {
+    const memPlayer = memoryPlayers.get(interaction.user.id);
+    const verifiedRecent = recentVerifiedAccounts.get(interaction.user.id);
+    if (memPlayer || verifiedRecent) {
+      const ign = memPlayer?.ign || verifiedRecent?.ign;
+      return interaction.reply({
+        embeds: [
+          createSuccessEmbed(
+            "Account Verified!",
+            `✅ Successfully linked to **${ign}**! You can now click **[Enter Waitlist]** or **[Join Queue]** on any ladder panel.`
+          ),
+        ],
+        ephemeral: true,
       });
     }
 
-    await QueueService.setupOrRefreshPanels(interaction.client);
-    return interaction.editReply({
-      embeds: [createSuccessEmbed("Queue Left", result.message)],
+    return interaction.reply({
+      embeds: [
+        createWarningEmbed(
+          "Not Connected Yet",
+          `No direct connection was received from Minecraft yet.\n\n` +
+          `• Open Minecraft Multiplayer -> Direct Connection.\n` +
+          `• Connect to the address provided above.\n` +
+          `• Or click **Instant Verify** to link immediately without opening Minecraft!`
+        ),
+      ],
+      ephemeral: true,
     });
   }
 
+  // --- ACTIVE QUEUE JOIN (When Tester is Online) ---
+  if (customId.startsWith("waitlist_join_active_")) {
+    const kit = customId.replace("waitlist_join_active_", "") as Kit;
+    await QueueService.handleJoinActiveQueue(interaction, kit);
+    return;
+  }
+
+  // --- ENTER WAITLIST MODAL ---
+  if (customId.startsWith("waitlist_enter_")) {
+    const kit = customId.replace("waitlist_enter_", "") as Kit;
+    const memPlayer = memoryPlayers.get(interaction.user.id);
+    const defaultReg = memPlayer?.region || "AS";
+    return interaction.showModal(QueueService.createWaitlistModal(kit, defaultReg));
+  }
+
+  // --- VIEW COOLDOWN ---
+  if (customId.startsWith("waitlist_cooldown_")) {
+    const kit = customId.replace("waitlist_cooldown_", "") as Kit;
+    await interaction.deferReply({ ephemeral: true });
+    const msg = await QueueService.handleViewCooldown(interaction.user.id, kit);
+    return interaction.editReply({ content: msg });
+  }
+
+  // --- SUPPORT TICKET CLOSE BUTTON ---
+  if (customId === "ticket_close_btn") {
+    await SupportTicketService.handleCloseTicket(interaction);
+    return;
+  }
+
+  // --- LADDER QUICK TOGGLE BUTTONS ---
+  if (customId === "ladder_unlock_all") {
+    await LadderRoleService.handleUnlockAll(interaction);
+    return;
+  }
+
+  if (customId === "ladder_hide_all") {
+    await LadderRoleService.handleHideAll(interaction);
+    return;
+  }
+
+  if (customId === "mctiers_verify_help") {
+    const helpEmbed = createBaseEmbed("⛏️ Minecraft Verification Guide")
+      .setColor(VY_COLORS.cyan)
+      .setDescription(
+        `### Why do I need to verify?\n` +
+        `Linking your Minecraft username confirms your in-game identity and allows testers to ratify results to your official dossier.\n\n` +
+        `### Instructions:\n` +
+        `1. Click the green **[Verify Account]** button.\n` +
+        `2. Direct Connect in Minecraft Java Edition to the server address provided, or choose **Instant Verify**.\n` +
+        `3. In Minecraft, you will be disconnected with: \`Account Verified ({IGN})\`.\n` +
+        `4. Return to Discord and click **[Enter Waitlist]** or **[Join Queue]**!\n\n` +
+        `Once verified, your nickname updates automatically and all gamemode queue channels will be accessible!`
+      );
+    return interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+  }
+
+  // --- LEGACY QUEUE INFO BUTTON ---
   if (customId.startsWith("queue_info_")) {
     const kit = customId.replace("queue_info_", "") as Kit;
     const kitMeta = KIT_MAP[kit];
@@ -120,89 +228,8 @@ async function handleButton(interaction: ButtonInteraction) {
         `### Ladder Guidelines\n` +
         `• **Format:** First-to-5 Duels (FT5).\n` +
         `• **Average Duration:** 8–15 minutes.\n` +
-        `• **Allowed Clients:** Lunar, Badlion, Feather, Vanilla, Fabric (standard competitive mods only).\n` +
-        `• **Ping Rules:** If latency difference exceeds 60ms, duel on neutral or balanced host.\n\n` +
-        `### Cooldown Policies\n` +
-        `• **Promotion:** 14-day ladder cooldown.\n` +
-        `• **Retention / Failure:** 7-day ladder cooldown.\n` +
-        `• **Demotion:** 3-day ladder cooldown.\n\n` +
-        `*Click [Join Queue] on the main panel when you are warmed up and ready!*`
+        `• **Ruleset:** Tier testing requires standard Vyntric competitive rules. Refusing fair duel parameters or unsportsmanlike conduct results in an automatic forfeiture.`
       );
-
     return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  // --- TICKET CONTROL BUTTONS ---
-  if (!(interaction.channel instanceof TextChannel)) return;
-
-  const topic = interaction.channel.topic || "";
-  const isTicketChannel = topic.toLowerCase().includes("vyntric pvp tier test");
-
-  if (!isTicketChannel) {
-    return interaction.reply({
-      embeds: [createErrorEmbed("Invalid Action", "This button can only be used inside a Vyntric test ticket channel.")],
-      ephemeral: true,
-    });
-  }
-
-  // Permission check: Tester, Head Tester, or Admin
-  const isStaff =
-    interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-    (config.ROLE_HEAD_TESTER_ID &&
-      interaction.guild?.members.cache.get(interaction.user.id)?.roles.cache.has(config.ROLE_HEAD_TESTER_ID)) ||
-    (config.ROLE_TESTER_ID &&
-      interaction.guild?.members.cache.get(interaction.user.id)?.roles.cache.has(config.ROLE_TESTER_ID));
-
-  if (customId === "ticket_start") {
-    return interaction.reply({
-      content: `⏱ **Test Commenced!** Tester <@${interaction.user.id}> has officially started the duel timer. Best of luck to both combatants!`,
-    });
-  }
-
-  if (customId === "ticket_noshow") {
-    if (!isStaff) {
-      return interaction.reply({
-        embeds: [createErrorEmbed("Permission Denied", "Only the assigned tester or staff may mark a player as no-show.")],
-        ephemeral: true,
-      });
-    }
-
-    await interaction.deferReply();
-    await TestService.handleTicketCancellation(
-      interaction.channel,
-      interaction.user,
-      "NO_SHOW"
-    );
-    await QueueService.setupOrRefreshPanels(interaction.client);
-    return;
-  }
-
-  if (customId === "ticket_cancel") {
-    if (!isStaff) {
-      return interaction.reply({
-        embeds: [createErrorEmbed("Permission Denied", "Only the tester or staff may cancel an active test.")],
-        ephemeral: true,
-      });
-    }
-
-    await interaction.deferReply();
-    await TestService.handleTicketCancellation(
-      interaction.channel,
-      interaction.user,
-      "CANCELLED"
-    );
-    await QueueService.setupOrRefreshPanels(interaction.client);
-    return;
-  }
-
-  if (customId === "ticket_close") {
-    await interaction.deferReply();
-    await TestService.handleTicketCancellation(
-      interaction.channel,
-      interaction.user,
-      "MANUAL_CLOSE"
-    );
-    await QueueService.setupOrRefreshPanels(interaction.client);
-    return;
   }
 }

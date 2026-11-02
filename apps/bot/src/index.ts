@@ -8,6 +8,7 @@ import { config } from "./config.js";
 import { deployCommands } from "./deploy-commands.js";
 import { handleInteraction } from "./events/interactionCreate.js";
 import { QueueService } from "./services/queueService.js";
+import { McVerifyServer } from "./services/mcVerifyServer.js";
 
 export const client = new Client({
   intents: [
@@ -39,6 +40,9 @@ client.once("ready", async () => {
   // Setup / refresh queue panels in #queue
   await QueueService.setupOrRefreshPanels(client);
   console.log("⚔️ Queue panels initialized.");
+
+  // Start Minecraft Java Edition in-game verification server
+  McVerifyServer.start(client);
 });
 
 client.on("interactionCreate", async (interaction) => {
