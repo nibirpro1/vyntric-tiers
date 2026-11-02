@@ -1,0 +1,148 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Player {
+  id          String       @id @default(cuid())
+  discordId   String       @unique
+  ign         String       @unique
+  uuid        String?
+  region      Region
+  points      Int          @default(0)
+  createdAt   DateTime     @default(now())
+  tiers       PlayerTier[]
+  tests       Test[]       @relation("PlayerTests")
+  banned      Boolean      @default(false)
+}
+
+model PlayerTier {
+  id        String   @id @default(cuid())
+  playerId  String
+  kit       Kit
+  tier      Tier
+  peakTier  Tier
+  updatedAt DateTime @updatedAt
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, kit])
+}
+
+model Tester {
+  id             String      @id @default(cuid())
+  discordId      String      @unique
+  name           String
+  ign            String
+  role           StaffRole
+  specialties    Kit[]
+  status         Status      @default(OFFLINE)
+  quote          String?
+  testsCompleted Int         @default(0)
+  joinDate       DateTime    @default(now())
+  tests          Test[]      @relation("TesterTests")
+}
+
+model QueueEntry {
+  id        String      @id @default(cuid())
+  playerId  String
+  kit       Kit
+  region    Region
+  position  Int
+  status    QueueStatus @default(WAITING)
+  createdAt DateTime    @default(now())
+}
+
+model Test {
+  id           String    @id @default(cuid())
+  playerId     String
+  testerId     String
+  kit          Kit
+  previousTier Tier?
+  newTier      Tier
+  result       Result
+  score        String
+  durationSec  Int
+  ticketId     String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  player       Player    @relation("PlayerTests", fields: [playerId], references: [id], onDelete: Cascade)
+  tester       Tester    @relation("TesterTests", fields: [testerId], references: [id], onDelete: Cascade)
+}
+
+model Cooldown {
+  playerId String
+  kit      Kit
+  until    DateTime
+
+  @@id([playerId, kit])
+}
+
+enum Tier {
+  HT1
+  LT1
+  HT2
+  LT2
+  HT3
+  LT3
+  HT4
+  LT4
+  HT5
+  LT5
+}
+
+enum Kit {
+  VANILLA
+  SWORD
+  AXE
+  CRYSTAL
+  UHC
+  POT
+  SMP
+  MACE
+  DIASMP
+}
+
+enum Region {
+  NA
+  EU
+  AS
+  AU
+  SA
+  AF
+}
+
+enum StaffRole {
+  OWNER
+  CO_OWNER
+  MANAGER
+  HEAD_TESTER
+  SENIOR_TESTER
+  TESTER
+  TRIAL_TESTER
+  DEVELOPER
+}
+
+enum Status {
+  ONLINE
+  TESTING
+  OFFLINE
+}
+
+enum QueueStatus {
+  WAITING
+  IN_TEST
+  DONE
+  CANCELLED
+}
+
+enum Result {
+  PROMOTED
+  DEMOTED
+  RETAINED
+  NEW
+}

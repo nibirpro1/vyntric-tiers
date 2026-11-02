@@ -1,0 +1,22 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="iconLeft" x1="6" y1="8" x2="24" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#A78BFA" />
+      <stop offset="1" stopColor="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="iconRight" x1="42" y1="8" x2="24" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#67E8F9" />
+      <stop offset="1" stopColor="#0891B2" />
+    </linearGradient>
+    <linearGradient id="iconCenter" x1="24" y1="18" x2="24" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#FFFFFF" stopOpacity="0.9" />
+      <stop offset="1" stopColor="#22D3EE" stopOpacity="0.25" />
+    </linearGradient>
+  </defs>
+  <path d="M6 10L18 8L24 44L13 26L6 10Z" fill="url(#iconLeft)" />
+  <path d="M42 10L30 8L24 44L35 26L42 10Z" fill="url(#iconRight)" />
+  <path d="M18 8L24 20L30 8L24 14L18 8Z" fill="#DDD6FE" fillOpacity="0.8" />
+  <path d="M24 20L18 24L24 44L30 24L24 20Z" fill="url(#iconCenter)" />
+  <path d="M18 8L24 44M30 8L24 44M13 26L24 20M35 26L24 20" stroke="rgba(255, 255, 255, 0.4)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+  <path d="M6 10L18 8L24 20" stroke="rgba(255, 255, 255, 0.7)" strokeWidth="1.2" strokeLinecap="round" />
+</svg>

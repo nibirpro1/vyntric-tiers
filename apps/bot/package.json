@@ -1,0 +1,25 @@
+{
+  "name": "@vyntric/bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "deploy-commands": "tsx src/deploy-commands.ts"
+  },
+  "dependencies": {
+    "@vyntric/shared": "workspace:*",
+    "@vyntric/db": "workspace:*",
+    "@prisma/client": "^5.22.0",
+    "discord.js": "^14.16.3",
+    "dotenv": "^18.0.9",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

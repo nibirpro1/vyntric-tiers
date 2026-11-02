@@ -1,0 +1,421 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Official Vyntric Aesthetic: Deep Obsidian with Crimson & Electric Violet Glow */
+  --bg: #07080D;
+  --surface: #0C101B;
+  --surface-2: #121827;
+  --line: rgba(255, 45, 85, 0.14);
+  --line-strong: rgba(255, 45, 85, 0.28);
+  --text: #F1F4FA;
+  --muted: #8491A5;
+
+  /* Brand accents */
+  --brand-crimson: #FF2D55;
+  --brand-ruby: #E11D48;
+  --brand-violet: #7C3AED;
+  --brand-cyan: #22D3EE;
+  --brand-gold: #FFB800;
+  --brand-hot: #FF2D55;
+
+  /* Ambient Glows */
+  --glow-primary: rgba(255, 45, 85, 0.18);
+  --glow-secondary: rgba(124, 58, 237, 0.16);
+
+  /* Tier colors */
+  --tier-ht1: #FF2D55;
+  --tier-lt1: #FF6B4A;
+  --tier-ht2: #FFB020;
+  --tier-lt2: #FFD56B;
+  --tier-ht3: #22D3EE;
+  --tier-lt3: #67E8F9;
+  --tier-ht4: #7C3AED;
+  --tier-lt4: #A78BFA;
+  --tier-ht5: #22C55E;
+  --tier-lt5: #86EFAC;
+  --tier-unranked: #64748B;
+}
+
+[data-theme="obsidian"] {
+  --bg: #07080C;
+  --surface: #0E0F17;
+  --surface-2: #161824;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #F1F3F9;
+  --muted: #8B91A4;
+  --glow-primary: rgba(244, 63, 94, 0.14);
+  --glow-secondary: rgba(124, 58, 237, 0.12);
+}
+
+[data-theme="amethyst"] {
+  --bg: #0A0716;
+  --surface: #120E24;
+  --surface-2: #1C1538;
+  --line: rgba(167, 139, 250, 0.12);
+  --line-strong: rgba(167, 139, 250, 0.22);
+  --text: #F3EDFA;
+  --muted: #9D91B8;
+  --glow-primary: rgba(124, 58, 237, 0.18);
+  --glow-secondary: rgba(236, 72, 153, 0.14);
+}
+
+[data-theme="emerald"] {
+  --bg: #050E0B;
+  --surface: #0B1914;
+  --surface-2: #10261F;
+  --line: rgba(52, 211, 153, 0.12);
+  --line-strong: rgba(52, 211, 153, 0.22);
+  --text: #E8F5F0;
+  --muted: #7E9E94;
+  --glow-primary: rgba(16, 185, 129, 0.16);
+  --glow-secondary: rgba(34, 211, 238, 0.12);
+}
+
+* {
+  border-color: var(--line);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: rgba(124, 58, 237, 0.35);
+  color: #22D3EE;
+}
+
+/* Thin custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: #191c28;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #252b3d;
+}
+
+/* Visible brand-colored keyboard focus rings */
+:focus-visible {
+  outline: 2px solid var(--brand-violet);
+  outline-offset: 2px;
+}
+
+/* Micro-label utility (mono, 10.5px, uppercase, tracking .14em, muted) */
+.micro-label {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Card Solid utility: surface bg, 1px line border, inset top highlight */
+.card-solid {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  position: relative;
+  border-radius: 1rem;
+}
+
+.card-solid::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  border-radius: 1rem 1rem 0 0;
+}
+
+/* Glass utility: backdrop-blur-2xl, white/[.06] bg, 1px gradient border via mask, inner glow */
+/* ONLY used on navbar, command palette, player modal, mobile menu */
+.glass {
+  background: rgba(11, 13, 20, 0.78);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+}
+
+/* Ambient background glow */
+.ambient-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: 
+    radial-gradient(circle 800px at 50% -100px, var(--glow-primary), transparent 70%),
+    radial-gradient(circle 600px at 15% 25%, var(--glow-secondary), transparent 60%),
+    radial-gradient(circle 600px at 85% 75%, var(--glow-primary), transparent 60%);
+  transition: background 0.5s ease;
+}
+
+/* Faint grid overlay masked with radial fade so it vanishes toward edges (opacity <= .05) */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  mask-image: radial-gradient(ellipse at 50% 30%, black 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 20%, transparent 75%);
+}
+
+/* Grain overlay: SVG feTurbulence data-URI, opacity <= .04, fixed, pointer-events: none */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Premium Esports Buttons & Shimmer Animations */
+.btn-vyntric-primary {
+  position: relative;
+  background: linear-gradient(135deg, #FF2D55 0%, #E11D48 50%, #7C3AED 100%);
+  color: #FFFFFF;
+  font-weight: 800;
+  border-radius: 0.75rem;
+  box-shadow: 
+    0 0 20px rgba(255, 45, 85, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.btn-vyntric-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 
+    0 0 28px rgba(255, 45, 85, 0.65),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  filter: brightness(1.08);
+}
+
+.btn-vyntric-primary:active {
+  transform: translateY(0.5px);
+  box-shadow: 0 0 12px rgba(255, 45, 85, 0.35);
+}
+
+.btn-vyntric-discord {
+  position: relative;
+  background: #0B0E17;
+  border: 1px solid rgba(88, 101, 242, 0.4);
+  color: #FFFFFF;
+  border-radius: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-vyntric-discord:hover {
+  border-color: #5865F2;
+  background: rgba(88, 101, 242, 0.15);
+  box-shadow: 0 0 20px rgba(88, 101, 242, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-vyntric-glass {
+  background: #111624;
+  border: 1px solid rgba(255, 45, 85, 0.18);
+  color: #F1F4FA;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.btn-vyntric-glass:hover {
+  background: #172033;
+  border-color: rgba(255, 45, 85, 0.45);
+  color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+/* Futuristic Cyber Audio Range Slider */
+.cyber-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.16);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cyber-slider:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.cyber-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: #FFFFFF;
+  border: 2px solid #22D3EE;
+  box-shadow: 0 0 10px #22D3EE, 0 0 4px #22D3EE;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cyber-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+  box-shadow: 0 0 16px #22D3EE, 0 0 6px #FFFFFF;
+}
+
+.cyber-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: #FFFFFF;
+  border: 2px solid #22D3EE;
+  box-shadow: 0 0 10px #22D3EE, 0 0 4px #22D3EE;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+/* Global Button Spring Bounce & Click Interaction */
+button:not(:disabled),
+[role="button"],
+a.btn-vyntric-primary,
+a.btn-vyntric-discord,
+a.btn-vyntric-glass {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, filter 0.18s ease;
+  will-change: transform;
+}
+
+button:not(:disabled):hover,
+[role="button"]:hover,
+a.btn-vyntric-primary:hover,
+a.btn-vyntric-discord:hover,
+a.btn-vyntric-glass:hover {
+  filter: brightness(1.08);
+}
+
+button:not(:disabled):active,
+[role="button"]:active,
+a.btn-vyntric-primary:active,
+a.btn-vyntric-discord:active,
+a.btn-vyntric-glass:active {
+  transform: scale(0.93) translateY(1.5px) !important;
+  filter: brightness(1.22);
+}
+
+/* Ripple Pulse & Cyber Hit Animations for Click Feedback */
+@keyframes cyber-shockwave {
+  0% {
+    width: 0px;
+    height: 0px;
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+    border-width: 3.5px;
+  }
+  50% {
+    opacity: 0.85;
+    border-width: 2.5px;
+  }
+  100% {
+    width: 88px;
+    height: 88px;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+@keyframes cyber-ripple {
+  0% {
+    width: 0px;
+    height: 0px;
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.7;
+    border-width: 2px;
+  }
+  100% {
+    width: 140px;
+    height: 140px;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+@keyframes spark-fly {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0) scale(1.4) rotate(0deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0) rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
+.animate-cyber-shockwave {
+  border-style: solid;
+  animation: cyber-shockwave 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-cyber-ripple {
+  border-style: solid;
+  animation: cyber-ripple 0.62s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-spark-fly {
+  animation: spark-fly 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes ping-once {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  60% {
+    transform: scale(2.2);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+.animate-ping-once {
+  animation: ping-once 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
