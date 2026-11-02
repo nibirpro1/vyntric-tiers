@@ -31,14 +31,14 @@ export const recentVerifiedAccounts = new Map<string, { ign: string; discordId: 
 export function generateAuthCode(discordId: string): string {
   // Clean expired sessions (> 15 minutes)
   const now = Date.now();
-  for (const [code, sess] of pendingVerificationsByCode.entries()) {
+  pendingVerificationsByCode.forEach((sess, code) => {
     if (now - sess.createdAt > 15 * 60 * 1000) {
       pendingVerificationsByCode.delete(code);
       if (pendingVerificationsByDiscordId.get(sess.discordId)?.code === code) {
         pendingVerificationsByDiscordId.delete(sess.discordId);
       }
     }
-  }
+  });
 
   // Check if active code already exists
   const existing = pendingVerificationsByDiscordId.get(discordId);
